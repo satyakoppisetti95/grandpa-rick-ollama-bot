@@ -22,6 +22,7 @@ export default function Home() {
     status,
     error,
     interimText,
+    isPlayingAudio,
     displayMessages,
     startNewConversation,
   } = useVoiceChat();
@@ -121,7 +122,7 @@ export default function Home() {
 
           <div className="flex-1 flex flex-col min-h-0 w-full justify-center items-center">
             <div className="flex flex-col items-center justify-center flex-shrink-0 w-full sm:w-[420px]">
-              <Character expression={expression} animateMouthWhenSpeaking />
+              <Character expression={expression} animateMouthWhenSpeaking mouthActive={isPlayingAudio} />
               <div className="mt-5 w-full max-w-[320px] space-y-2 text-center">
                 <p className="text-sm text-white/80 min-h-[1.5rem]">{status}</p>
                 {interimText && (

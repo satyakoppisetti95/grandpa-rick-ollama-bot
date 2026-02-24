@@ -22,6 +22,7 @@ export function useVoiceChat() {
   const [error, setError] = useState<string | null>(null);
   const [interimText, setInterimText] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const finalTranscriptRef = useRef("");
 
   const sttRef = useRef<WebSpeechSTTService | null>(null);
@@ -131,13 +132,15 @@ export function useVoiceChat() {
           return;
         }
 
-        setExpression("speaking");
-        setStatus("Speaking...");
-
+        setStatus("Loading speech...");
         const tts = getTTS();
         tts.setCallbacks({
-          onStart: () => setExpression("speaking"),
+          onStart: () => {
+            setIsPlayingAudio(true);
+            setStatus("Speaking...");
+          },
           onEnd: () => {
+            setIsPlayingAudio(false);
             setExpression("idle");
             setStatus("Press Space to start listening");
           },
@@ -148,6 +151,7 @@ export function useVoiceChat() {
         setError(message);
         setStatus("Error. Press Space to try again.");
         setExpression("idle");
+        setIsPlayingAudio(false);
       } finally {
         isProcessingRef.current = false;
       }
@@ -217,6 +221,7 @@ export function useVoiceChat() {
     setStatus("Press Space to start listening");
     setError(null);
     setInterimText("");
+    setIsPlayingAudio(false);
   }, [stopListening]);
 
   useEffect(() => {
@@ -242,6 +247,7 @@ export function useVoiceChat() {
     error,
     interimText,
     isListening,
+    isPlayingAudio,
     displayMessages,
     startNewConversation,
   };

@@ -8,6 +8,8 @@ interface CharacterProps {
   expression: CharacterExpression;
   mouthOpen?: number;
   animateMouthWhenSpeaking?: boolean;
+  /** When true, mouth animates (and overlay shows) even if expression is not "speaking". Use for thinking face + WAV playback. */
+  mouthActive?: boolean;
   className?: string;
 }
 
@@ -43,6 +45,7 @@ export function Character({
   expression,
   mouthOpen = 0,
   animateMouthWhenSpeaking = true,
+  mouthActive = false,
   className = "",
 }: CharacterProps) {
   const [blink, setBlink] = useState(false);
@@ -51,6 +54,8 @@ export function Character({
   const blinkRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameRef = useRef<number>(0);
   const startTimeRef = useRef(0);
+
+  const showMouth = expression === "speaking" || mouthActive;
 
   useEffect(() => {
     const scheduleBlink = () => {
@@ -64,7 +69,7 @@ export function Character({
   }, []);
 
   useEffect(() => {
-    if (expression !== "speaking" || !animateMouthWhenSpeaking) {
+    if (!showMouth || !animateMouthWhenSpeaking) {
       setSyntheticMouth(0);
       return;
     }
@@ -82,14 +87,13 @@ export function Character({
       running = false;
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [expression, animateMouthWhenSpeaking]);
+  }, [showMouth, animateMouthWhenSpeaking]);
 
-  const mouthAmount =
-    expression === "speaking"
-      ? animateMouthWhenSpeaking
-        ? syntheticMouth
-        : Math.min(1, Math.max(0, mouthOpen))
-      : 0;
+  const mouthAmount = showMouth
+    ? animateMouthWhenSpeaking
+      ? syntheticMouth
+      : Math.min(1, Math.max(0, mouthOpen))
+    : 0;
 
   const col = EXPRESSION_TO_COL[expression];
   const row = blink ? 1 : 0;
@@ -147,7 +151,7 @@ export function Character({
             onError={() => setSpriteError(true)}
             aria-hidden
           />
-          {expression === "speaking" && (
+          {showMouth && (
             <div
               style={{
                 position: "absolute",
