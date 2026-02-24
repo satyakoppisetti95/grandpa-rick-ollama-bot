@@ -5,7 +5,11 @@ import type { CharacterExpression } from "@/components/Character";
 import type { ChatMessage } from "@/lib/services/ollama";
 import { WebSpeechSTTService } from "@/lib/services/speech-to-text";
 import { OllamaClient } from "@/lib/services/ollama";
-import { WebSpeechTTSService } from "@/lib/services/text-to-speech";
+import type { TextToSpeechService } from "@/lib/services/text-to-speech";
+import {
+  WebSpeechTTSService,
+  RemoteTTSService,
+} from "@/lib/services/text-to-speech";
 
 const DEFAULT_SYSTEM_PROMPT =
   "The assistant is a 38 year old bitter man who rages at the world.";
@@ -21,7 +25,7 @@ export function useVoiceChat() {
   const finalTranscriptRef = useRef("");
 
   const sttRef = useRef<WebSpeechSTTService | null>(null);
-  const ttsRef = useRef<WebSpeechTTSService | null>(null);
+  const ttsRef = useRef<TextToSpeechService | null>(null);
   const ollamaRef = useRef<OllamaClient | null>(null);
   /** Full conversation history for context (system + user + assistant turns). */
   const conversationRef = useRef<ChatMessage[]>([
@@ -43,8 +47,13 @@ export function useVoiceChat() {
     return sttRef.current;
   }, []);
 
-  const getTTS = useCallback(() => {
-    if (!ttsRef.current) ttsRef.current = new WebSpeechTTSService();
+  const getTTS = useCallback((): TextToSpeechService => {
+    if (!ttsRef.current) {
+      const ttsUrl = process.env.NEXT_PUBLIC_TTS_SERVER_URL;
+      const remote = ttsUrl ? new RemoteTTSService(ttsUrl) : null;
+      ttsRef.current =
+        remote?.isSupported() ? remote : new WebSpeechTTSService();
+    }
     return ttsRef.current;
   }, []);
 

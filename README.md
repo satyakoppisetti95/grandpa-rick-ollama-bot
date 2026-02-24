@@ -44,10 +44,13 @@ Open [http://localhost:3000](http://localhost:3000). Allow microphone when promp
 | `NEXT_PUBLIC_OLLAMA_BASE_URL` | Your Ollama server URL. Default: `http://localhost:11434`. If Ollama is on another machine (e.g. `192.168.1.5`), use `http://192.168.1.5:11434`. | No |
 | `NEXT_PUBLIC_OLLAMA_MODEL` | Model name from Ollama (e.g. `llama3.2`, `gurubot/self-after-dark`). Must be pulled with `ollama pull <name>`. Default: `llama3.2`. | No |
 | `NEXT_PUBLIC_OLLAMA_SYSTEM_PROMPT` | System prompt that defines the character. Default: *"The assistant is a 38 year old bitter man who rages at the world."* (works well with [gurubot/self-after-dark](https://ollama.com/gurubot/self-after-dark)). | No |
+| `NEXT_PUBLIC_TTS_SERVER_URL` | Base URL of a remote TTS server that accepts `POST /synthesize` with `{ "text": "..." }` and returns a WAV file. If set, the app uses this for speech instead of the browser’s built-in Web Speech TTS. If unset, defaults to Web Speech. Example: `http://192.168.1.5:8000`. | No |
 
 Create a `.env` or `.env.local` in the project root and add any of these if you need to override defaults. Restart `npm run dev` after changing env.
 
 **Using the “bitter man” character (self-after-dark):** Pull the model with `ollama pull gurubot/self-after-dark`, then set `NEXT_PUBLIC_OLLAMA_MODEL=gurubot/self-after-dark` in `.env`. The default system prompt is already set to the recommended style for that model.
+
+**Using a custom TTS server:** If you run a TTS server (e.g. a Python script that turns text into WAV), set `NEXT_PUBLIC_TTS_SERVER_URL` to its base URL (e.g. `http://192.168.1.5:8000`). The app will send `POST /synthesize` with `{ "text": "..." }` and expect `200` with `Content-Type: audio/wav` and the WAV bytes. If the URL is not set, the app uses the browser’s built-in Web Speech TTS.
 
 ---
 
@@ -66,7 +69,7 @@ The character is driven by **sprite sheets**. If `public/character-sheet.png` an
 |--------|-------------|--------|------------------------|
 | **Speech-to-text** | Browser Web Speech API (`SpeechRecognition`) | Yes | Implement `lib/services/speech-to-text/types.ts` (e.g. Whisper, Google Cloud STT). |
 | **LLM** | Ollama on your machine/network | Yes (local) | Implement `lib/services/ollama/types.ts` or change `OllamaClient` base URL; or swap to another backend that implements the same interface. |
-| **Text-to-speech** | Browser Web Speech API (`SpeechSynthesis`) | Yes | Implement `lib/services/text-to-speech/types.ts` (e.g. ElevenLabs, Play.ht, or local TTS). |
+| **Text-to-speech** | Browser Web Speech API (`SpeechSynthesis`), or remote TTS server if `NEXT_PUBLIC_TTS_SERVER_URL` is set | Yes | Set `NEXT_PUBLIC_TTS_SERVER_URL` for a custom TTS server; or implement `lib/services/text-to-speech/types.ts` (e.g. ElevenLabs, Play.ht). |
 | **Character / lip-sync** | SVG character in `components/Character.tsx`; mouth animated with a time-based wave while speaking (no audio analysis). | Yes | For volume-based lip-sync, add a TTS implementation that exposes an audio stream and drive `mouthOpen` from volume (e.g. Web Audio `AnalyserNode`). |
 
 ---
