@@ -51,6 +51,15 @@ Create a `.env` or `.env.local` in the project root and add any of these if you 
 
 ---
 
+## Character sprites
+
+The character is driven by **sprite sheets**. If `public/character-sheet.png` and `public/mouth-sheet.png` are missing, the app shows a placeholder and instructions.
+
+- **Layout and specs:** [docs/SPRITES.md](docs/SPRITES.md) — grid layout, dimensions, and file names.
+- **Prompt for AI image generation:** [docs/PROMPT_FOR_SPRITES.md](docs/PROMPT_FOR_SPRITES.md) — copy-paste prompt for Gemini (or similar) to generate the two PNGs. Then save them into `public/` as `character-sheet.png` and `mouth-sheet.png`.
+
+---
+
 ## Where to get what
 
 | Feature | What’s used | Free? | How to replace later |

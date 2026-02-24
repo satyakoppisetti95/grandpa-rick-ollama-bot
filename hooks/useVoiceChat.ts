@@ -35,6 +35,8 @@ export function useVoiceChat() {
 
   const isListeningRef = useRef(false);
   const isProcessingRef = useRef(false);
+  /** True only when user pressed Space to stop; then onEnd will send to Ollama. Browser-only end does not send. */
+  const userStoppedRef = useRef(false);
 
   const getSTT = useCallback(() => {
     if (!sttRef.current) sttRef.current = new WebSpeechSTTService();
@@ -53,14 +55,13 @@ export function useVoiceChat() {
 
   const stopListening = useCallback(() => {
     const stt = getSTT();
-    if (stt.isListening()) {
-      stt.stopListening();
-      isListeningRef.current = false;
-      setIsListening(false);
-      setExpression((e: CharacterExpression) => (e === "listening" ? "idle" : e));
-      setStatus("Press Space to start listening");
-      setInterimText("");
-    }
+    if (!stt.isListening()) return;
+    userStoppedRef.current = true;
+    stt.stopListening();
+    isListeningRef.current = false;
+    setIsListening(false);
+    setInterimText("");
+    // Don't set expression/status here — onEnd will either run processTranscript (→ thinking) or set idle
   }, [getSTT]);
 
   const processTranscript = useCallback(
@@ -170,7 +171,6 @@ export function useVoiceChat() {
         if (isFinal) {
           finalTranscriptRef.current = text;
           setInterimText("");
-          processTranscript(text);
         } else {
           setInterimText(text);
         }
@@ -182,13 +182,17 @@ export function useVoiceChat() {
       },
       onStart: () => setExpression("listening"),
       onEnd: () => {
-        if (!isListeningRef.current) return;
-        const t = finalTranscriptRef.current.trim();
-        if (t) processTranscript(t);
-        else {
-          setExpression("idle");
-          setStatus("Press Space to start listening");
+        const wasUserStop = userStoppedRef.current;
+        userStoppedRef.current = false;
+        if (wasUserStop) {
+          const t = finalTranscriptRef.current.trim();
+          if (t) {
+            processTranscript(t);
+            return;
+          }
         }
+        setExpression("idle");
+        setStatus("Press Space to start listening");
       },
     });
 
@@ -196,12 +200,6 @@ export function useVoiceChat() {
     isListeningRef.current = true;
     setIsListening(true);
   }, [getSTT, stopListening, processTranscript]);
-
-  const toggleListening = useCallback(() => {
-    const stt = getSTT();
-    if (stt.isListening()) stopListening();
-    else startListening();
-  }, [getSTT, startListening, stopListening]);
 
   const startNewConversation = useCallback(() => {
     stopListening();
@@ -214,21 +212,26 @@ export function useVoiceChat() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        e.preventDefault();
-        toggleListening();
+      if (e.code !== "Space") return;
+      if (e.target instanceof HTMLElement && (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea"))) return;
+      e.preventDefault();
+      const stt = getSTT();
+      if (stt.isListening()) {
+        stopListening();
+        return;
       }
+      if (isProcessingRef.current) return;
+      startListening();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [toggleListening]);
+  }, [getSTT, startListening, stopListening]);
 
   return {
     expression,
     status,
     error,
     interimText,
-    toggleListening,
     isListening,
     displayMessages,
     startNewConversation,
