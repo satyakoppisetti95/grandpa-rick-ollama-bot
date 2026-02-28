@@ -5,6 +5,12 @@ import { useEffect, useRef } from "react";
 interface ChatBoxProps {
   messages: { role: "user" | "assistant"; content: string }[];
   onNewConversation: () => void;
+  /** When provided, assistant messages show a voice icon to re-play TTS. */
+  onSpeakMessage?: (text: string) => void;
+  /** Only assistant messages whose content is in this set show the voice icon (after TTS has been synthesized once). */
+  synthesizedMessageContents?: Set<string>;
+  /** When true, the voice icon is disabled (e.g. while another message is playing). */
+  isPlayingAudio?: boolean;
   className?: string;
   fillContainer?: boolean;
   darkMode?: boolean;
@@ -19,9 +25,27 @@ function formatTimestamp() {
   return `Today, ${time}`;
 }
 
+function SpeakerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 0 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" />
+      <path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z" />
+    </svg>
+  );
+}
+
 export function ChatBox({
   messages,
   onNewConversation,
+  onSpeakMessage,
+  synthesizedMessageContents,
+  isPlayingAudio = false,
   className = "",
   fillContainer = false,
   darkMode = false,
@@ -105,8 +129,29 @@ export function ChatBox({
                         }`
                   }
                 >
-                  <div className="whitespace-pre-wrap break-words">
-                    {msg.content || <span className="opacity-60 italic">…</span>}
+                  <div className="flex items-end gap-1.5">
+                    <div className="whitespace-pre-wrap break-words min-w-0 flex-1">
+                      {msg.content || <span className="opacity-60 italic">…</span>}
+                    </div>
+                    {msg.role === "assistant" &&
+                      onSpeakMessage &&
+                      (msg.content?.trim() ?? "") &&
+                      synthesizedMessageContents?.has(msg.content.trim()) && (
+                      <button
+                        type="button"
+                        onClick={() => onSpeakMessage(msg.content)}
+                        disabled={isPlayingAudio}
+                        className={`shrink-0 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed ${
+                          dark
+                            ? "text-white/70 hover:bg-white/15 hover:text-white focus:ring-white/40 disabled:hover:bg-transparent"
+                            : "text-gray-500 hover:bg-gray-200 hover:text-gray-700 focus:ring-gray-300 disabled:hover:bg-transparent"
+                        }`}
+                        aria-label="Play again"
+                        title="Play again"
+                      >
+                        <SpeakerIcon className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

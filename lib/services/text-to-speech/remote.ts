@@ -7,9 +7,11 @@ import type {
 } from "./types";
 
 const SYNTHESIZE_PATH = "/synthesize";
+const MAX_CACHE_ENTRIES = 50;
 
 /**
  * TTS service that calls a remote server: POST { text } → response body = WAV bytes.
+ * Caches decoded AudioBuffers in memory by text so replay does not re-request.
  * Set NEXT_PUBLIC_TTS_SERVER_URL to the base URL of your TTS server (e.g. http://192.168.1.5:8000).
  * If unset, the app falls back to Web Speech TTS.
  */
@@ -19,6 +21,8 @@ export class RemoteTTSService implements TextToSpeechService {
   private abortController: AbortController | null = null;
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
+  /** Cache of trimmed text → decoded AudioBuffer for replay without re-fetching. */
+  private cache = new Map<string, AudioBuffer>();
 
   constructor(baseUrl?: string) {
     const url =
@@ -51,58 +55,68 @@ export class RemoteTTSService implements TextToSpeechService {
 
     this.cancel();
 
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
-
-    const url = `${this.baseUrl}${SYNTHESIZE_PATH}`;
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: trimmed }),
-        signal,
-      });
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      throw err;
-    }
-
-    if (!res.ok) {
-      const contentType = res.headers.get("Content-Type") ?? "";
-      let message = `TTS server error ${res.status}`;
-      if (contentType.includes("application/json")) {
-        try {
-          const body = (await res.json()) as { error?: string };
-          if (body.error) message = body.error;
-        } catch {
-          // use default message
-        }
-      } else {
-        const text = await res.text();
-        if (text) message = text;
-      }
-      throw new Error(message);
-    }
-
-    const arrayBuffer = await res.arrayBuffer();
-    if (signal.aborted) return;
-
     const ctx = this.audioContext ?? new AudioContext();
     this.audioContext = ctx;
 
-    let buffer: AudioBuffer;
-    try {
-      buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-    } catch (e) {
-      throw new Error(
-        `TTS server returned invalid audio: ${e instanceof Error ? e.message : String(e)}`
-      );
+    let buffer: AudioBuffer | undefined = this.cache.get(trimmed);
+
+    if (!buffer) {
+      this.abortController = new AbortController();
+      const signal = this.abortController.signal;
+
+      const url = `${this.baseUrl}${SYNTHESIZE_PATH}`;
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: trimmed }),
+          signal,
+        });
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        throw err;
+      }
+
+      if (!res.ok) {
+        const contentType = res.headers.get("Content-Type") ?? "";
+        let message = `TTS server error ${res.status}`;
+        if (contentType.includes("application/json")) {
+          try {
+            const body = (await res.json()) as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // use default message
+          }
+        } else {
+          const textBody = await res.text();
+          if (textBody) message = textBody;
+        }
+        throw new Error(message);
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+      if (signal.aborted) return;
+
+      try {
+        buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      } catch (e) {
+        throw new Error(
+          `TTS server returned invalid audio: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+
+      if (signal.aborted) return;
+
+      this.cache.set(trimmed, buffer);
+      if (this.cache.size > MAX_CACHE_ENTRIES) {
+        const firstKey = this.cache.keys().next().value;
+        if (firstKey !== undefined) this.cache.delete(firstKey);
+      }
+      this.abortController = null;
     }
 
-    if (signal.aborted) return;
-
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);

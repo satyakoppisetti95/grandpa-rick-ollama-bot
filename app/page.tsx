@@ -7,6 +7,7 @@ import { useVoiceChat } from "@/hooks/useVoiceChat";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [textInput, setTextInput] = useState("");
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -23,9 +24,21 @@ export default function Home() {
     error,
     interimText,
     isPlayingAudio,
+    isProcessing,
     displayMessages,
+    synthesizedMessageContents,
     startNewConversation,
+    sendMessage,
+    speakText,
   } = useVoiceChat();
+
+  const handleTextSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = textInput.trim();
+    if (!trimmed || isProcessing || isPlayingAudio) return;
+    sendMessage(trimmed);
+    setTextInput("");
+  };
 
   return (
     <>
@@ -102,6 +115,9 @@ export default function Home() {
           <ChatBox
             messages={displayMessages}
             onNewConversation={startNewConversation}
+            onSpeakMessage={speakText}
+            synthesizedMessageContents={synthesizedMessageContents}
+            isPlayingAudio={isPlayingAudio}
             fillContainer
             darkMode
           />
@@ -134,6 +150,28 @@ export default function Home() {
                   </p>
                 )}
               </div>
+
+              <form
+                onSubmit={handleTextSubmit}
+                className="mt-4 w-full max-w-[320px] flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="Or type a message..."
+                  disabled={isProcessing || isPlayingAudio}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Type a message to send"
+                />
+                <button
+                  type="submit"
+                  disabled={isProcessing || isPlayingAudio || !textInput.trim()}
+                  className="shrink-0 px-4 py-2 rounded-lg bg-white/15 text-white/90 text-sm font-medium hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Send
+                </button>
+              </form>
             </div>
           </div>
         </div>

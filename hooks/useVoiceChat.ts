@@ -23,6 +23,7 @@ export function useVoiceChat() {
   const [interimText, setInterimText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const finalTranscriptRef = useRef("");
 
   const sttRef = useRef<WebSpeechSTTService | null>(null);
@@ -37,6 +38,11 @@ export function useVoiceChat() {
   const [displayMessages, setDisplayMessages] = useState<
     { role: "user" | "assistant"; content: string }[]
   >([]);
+
+  /** Assistant message texts that have had TTS synthesized (voice icon shown only for these). */
+  const [synthesizedMessageContents, setSynthesizedMessageContents] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const isListeningRef = useRef(false);
   const isProcessingRef = useRef(false);
@@ -80,6 +86,7 @@ export function useVoiceChat() {
       if (!trimmed || isProcessingRef.current) return;
 
       isProcessingRef.current = true;
+      setIsProcessing(true);
       setExpression("thinking");
       setStatus("Thinking...");
       setInterimText("");
@@ -129,6 +136,7 @@ export function useVoiceChat() {
           setStatus("No reply. Press Space to try again.");
           setExpression("idle");
           isProcessingRef.current = false;
+          setIsProcessing(false);
           return;
         }
 
@@ -146,6 +154,7 @@ export function useVoiceChat() {
           },
         });
         await tts.speak(replyTrimmed);
+        setSynthesizedMessageContents((prev) => new Set(prev).add(replyTrimmed));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
@@ -154,9 +163,39 @@ export function useVoiceChat() {
         setIsPlayingAudio(false);
       } finally {
         isProcessingRef.current = false;
+        setIsProcessing(false);
       }
     },
     [getOllama, getTTS]
+  );
+
+  const sendMessage = useCallback(
+    (text: string) => {
+      processTranscript(text);
+    },
+    [processTranscript]
+  );
+
+  const speakText = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const tts = getTTS();
+      tts.setCallbacks({
+        onStart: () => {
+          setIsPlayingAudio(true);
+          setExpression("speaking");
+          setStatus("Speaking...");
+        },
+        onEnd: () => {
+          setIsPlayingAudio(false);
+          setExpression("idle");
+          setStatus("Press Space to start listening");
+        },
+      });
+      await tts.speak(trimmed);
+    },
+    [getTTS]
   );
 
   const startListening = useCallback(() => {
@@ -218,6 +257,7 @@ export function useVoiceChat() {
     stopListening();
     conversationRef.current = [{ role: "system", content: OLLAMA_SYSTEM_PROMPT }];
     setDisplayMessages([]);
+    setSynthesizedMessageContents(new Set());
     setStatus("Press Space to start listening");
     setError(null);
     setInterimText("");
@@ -229,6 +269,7 @@ export function useVoiceChat() {
       if (e.code !== "Space") return;
       if (e.target instanceof HTMLElement && (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea"))) return;
       e.preventDefault();
+      if (isPlayingAudio) return;
       const stt = getSTT();
       if (stt.isListening()) {
         stopListening();
@@ -239,7 +280,7 @@ export function useVoiceChat() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [getSTT, startListening, stopListening]);
+  }, [getSTT, startListening, stopListening, isPlayingAudio]);
 
   return {
     expression,
@@ -248,7 +289,11 @@ export function useVoiceChat() {
     interimText,
     isListening,
     isPlayingAudio,
+    isProcessing,
     displayMessages,
+    synthesizedMessageContents,
     startNewConversation,
+    sendMessage,
+    speakText,
   };
 }
